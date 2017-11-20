@@ -1,6 +1,7 @@
 import test from 'tape';
 import 'isomorphic-fetch';
 import nock from 'nock';
+import sinon from 'sinon';
 
 // Public package exports
 import {
@@ -1264,6 +1265,47 @@ test('apiMiddleware must use an [RSAA].options function when present', t => {
   const doGetState = () => {};
   const nextHandler = apiMiddleware({ getState: doGetState });
   const doNext = action => {};
+  const actionHandler = nextHandler(doNext);
+
+  t.plan(1);
+  actionHandler(anAction);
+});
+
+test('apiMiddleware must not pass fetch a [RSAA].body value of null', t => {
+  const fetchSpy = sinon.spy(global, 'fetch');
+
+  const api = nock('http://127.0.0.1')
+    .get('/api/users/1')
+    .reply(200);
+  const anAction = {
+    [RSAA]: {
+      endpoint: 'http://127.0.0.1/api/users/1',
+      method: 'GET',
+      types: ['REQUEST', 'SUCCESS', 'FAILURE'],
+      body: null
+    }
+  };
+  const doGetState = () => {};
+  const nextHandler = apiMiddleware({ getState: doGetState });
+  const doNext = action => {
+    if (action.type === 'SUCCESS') {
+      try {
+        // This is all in a try/catch for niceness with this sinon assertion
+        sinon.assert.calledOnce(fetchSpy);
+
+        t.notEqual(
+          fetchSpy.firstCall.args[1].body,
+          null,
+          'fetch is not passed a value of null'
+        );
+
+        fetchSpy.restore();
+      } catch (e) {
+        fetchSpy.restore();
+        t.fail(e);
+      }
+    }
+  };
   const actionHandler = nextHandler(doNext);
 
   t.plan(1);
